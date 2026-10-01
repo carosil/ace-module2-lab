@@ -101,15 +101,27 @@ router.post('/', (req: Request<Record<string, unknown>, Record<string, unknown>,
       }
 
       if (req.body.layout) {
-        const filePath: string = path.resolve(req.body.layout).toLowerCase()
-        const isForbiddenFile: boolean = (filePath.includes('ftp') || filePath.includes('ctf.key') || filePath.includes('encryptionkeys'))
+        if (typeof req.body.layout !== 'string') {
+          next(new Error('File access not allowed'))
+          return
+        }
+        const safeDir: string = path.resolve(__dirname, '../views')
+        const normalizedLayout: string = req.body.layout.replace(/\\/g, '/')
+        let resolvedPath: string = path.resolve(normalizedLayout)
+        if (!resolvedPath.startsWith(safeDir + path.sep)) {
+          resolvedPath = path.resolve(safeDir, normalizedLayout)
+        }
+        const isPathTraversal: boolean = !resolvedPath.startsWith(safeDir + path.sep)
+        const filePath: string = resolvedPath.toLowerCase()
+        const isForbiddenFile: boolean = isPathTraversal || (filePath.includes('ftp') || filePath.includes('ctf.key') || filePath.includes('encryptionkeys'))
         if (!isForbiddenFile) {
           res.render('dataErasureResult', {
             ...req.body,
+            layout: resolvedPath,
             ...themeVars
           }, (error, html) => {
             if (!html || error) {
-              next(new Error(error.message))
+              next(new Error(error?.message))
             } else {
               const sendlfrResponse: string = html.slice(0, 100) + '......'
               res.send(sendlfrResponse)
